@@ -14,6 +14,8 @@ from Bio import SeqIO
 
 DATABASE_URL = "file:sequence.sqlite?mode=ro"
 
+# new change
+
 #-----------------------------------------------------------------------
 
 # Returns a df with one column of all the sequences 
