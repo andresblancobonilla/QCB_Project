@@ -36,9 +36,11 @@ def align_sequences(fasta_file_list):
 
 def main():
 
-    fasta_file_list = ["refseq NC_045512.fasta"]
-    fasta_file_list = [f"FASTA/{file_name}" for file_name in fasta_file_list]
-    sequence_df = data_processing.read_sequences(fasta_file_list)
+    refseq_file = ["refseq NC_045512.fasta"]
+    refseq_file = [f"FASTA/{file_name}" for file_name in refseq_file]
+    sequence_df = data_processing.read_sequences(refseq_file)
+    refseq_str = sequence_df.sequence[0]
+    print(refseq_str)
     print(sequence_df)
     print(len(sequence_df.index))
 
