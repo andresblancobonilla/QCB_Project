@@ -66,7 +66,13 @@ def main():
 
     pickler(aligned_tuples, "C:/Users/gt512\Documents/Princeton/Code Repos/QCB_Project/pickled_tuples")
 
+    # depickling file as a variable
     test = depickler("C:/Users/gt512\Documents/Princeton/Code Repos/QCB_Project/pickled_alignments")
+
+    # substitution matrix of first alignment object
+    print(test[0].substitutions)
+
+
 
     
 
