@@ -9,9 +9,11 @@ import sys
 import sqlite3
 from contextlib import closing
 import pandas
+import Bio
 from Bio import SeqIO
 from Bio import Align
 import data_processing
+import pickle
 
 
 DATABASE_URL = "file:sequence.sqlite?mode=ro"
@@ -21,6 +23,7 @@ refseq_df = data_processing.read_sequences(refseq_file)
 refseq_str = refseq_df.sequence[0]
 
 aligner = Align.PairwiseAligner()
+aligner.mode = "global"
 aligner.match_score = 1.0
 aligner.open_gap_score = -10
 aligner.extend_gap_score = -.5
@@ -30,9 +33,18 @@ aligner.extend_gap_score = -.5
 # Returns an alignment object of the reference sequence with the query # sequence
 def align_to_refseq(query_seq):
     alignments = aligner.align(refseq_str, query_seq)
-    for alignment in alignments:
-        return alignment
+    return alignments[0]
 
+def pickler(data, filepath):
+    file = open(filepath, 'wb')
+    pickle.dump(data, file)
+    file.close()
+
+def depickler(filepath):
+    file = open(filepath, 'rb')
+    data = pickle.load(file)
+    file.close()
+    return data
 
 def main():
     # getting main 
@@ -41,9 +53,23 @@ def main():
             "part_5_gisaid.fasta", "part_6_gisaid.fasta"]
     fasta_file_list = [f"FASTA/{file_name}" for file_name in fasta_file_list]
     sequence_df = data_processing.read_sequences(fasta_file_list)
+    print(len(sequence_df.index))
 
-    aligned = align_to_refseq(sequence_df.sequence[5000])
-    print(aligned.substitutions)
+    all_alignments = []
+    aligned_tuples = []
+    for i in range(5):
+       aligned = align_to_refseq(sequence_df.sequence[i])
+       all_alignments.append(aligned)
+       aligned_tuples.append((aligned[0],aligned[1]))
+
+    pickler(all_alignments, "C:/Users/gt512\Documents/Princeton/Code Repos/QCB_Project/pickled_alignments")
+
+    pickler(aligned_tuples, "C:/Users/gt512\Documents/Princeton/Code Repos/QCB_Project/pickled_tuples")
+
+    test = depickler("C:/Users/gt512\Documents/Princeton/Code Repos/QCB_Project/pickled_alignments")
+
+    
+
 
 #-----------------------------------------------------------------------
 if __name__ == '__main__':
