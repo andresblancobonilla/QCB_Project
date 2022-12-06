@@ -57,7 +57,7 @@ def main():
 
     all_alignments = []
     aligned_tuples = []
-    for i in range(5):
+    for i in range(500):
        aligned = align_to_refseq(sequence_df.sequence[i])
        all_alignments.append(aligned)
        aligned_tuples.append((aligned[0],aligned[1]))
