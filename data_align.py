@@ -30,9 +30,9 @@ aligner.extend_gap_score = -.5
 
 #-----------------------------------------------------------------------
 
-# Returns an alignment object of the reference sequence with the query # sequence
+# Returns an alignment object of the reference sequence with the query
 def align_to_refseq(query_seq):
-    alignments = aligner.align(refseq_str, query_seq)
+    alignments = aligner.align("GAACT", query_seq)
     return alignments[0]
 
 def pickler(data, filepath):
@@ -57,20 +57,22 @@ def main():
 
     all_alignments = []
     aligned_tuples = []
-    for i in range(500):
-       aligned = align_to_refseq(sequence_df.sequence[i])
+    for i in range(1):
+       aligned = align_to_refseq("GGAT")
        all_alignments.append(aligned)
        aligned_tuples.append((aligned[0],aligned[1]))
 
-    pickler(all_alignments, "C:/Users/gt512\Documents/Princeton/Code Repos/QCB_Project/pickled_alignments")
+    print(all_alignments[0])
+    print(aligned_tuples)
+    # pickler(all_alignments, "C:/Users/gt512\Documents/Princeton/Code Repos/QCB_Project/pickled_alignments")
 
-    pickler(aligned_tuples, "C:/Users/gt512\Documents/Princeton/Code Repos/QCB_Project/pickled_tuples")
+    # pickler(aligned_tuples, "C:/Users/gt512\Documents/Princeton/Code Repos/QCB_Project/pickled_tuples")
 
     # depickling file as a variable
-    test = depickler("C:/Users/gt512\Documents/Princeton/Code Repos/QCB_Project/pickled_alignments")
+    # test = depickler("C:/Users/gt512\Documents/Princeton/Code Repos/QCB_Project/pickled_alignments")
 
     # substitution matrix of first alignment object
-    print(test[0].substitutions)
+    # print(test[0].substitutions)
 
 
 
