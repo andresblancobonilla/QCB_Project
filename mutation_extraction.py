@@ -21,9 +21,7 @@ import collections
 
 # -----------------------------------------------------------------------
 
-GENOME_SEGMENTS = {"ORF1ab": (265, 21555), "S": (21562, 25384), "ORF3a": (25392, 26220), "E": (26244, 26472),
-                   "M": (26522, 27191), "ORF6": (27201, 27387), "ORF7a": (27393, 27759), "ORF7b": (27755, 27887), "ORF8": (27893, 28259),
-                   "ORF10": (29557, 29674), "N": (28273, 29533)}
+
 
 NON_CODING_SEGMENTS = {"3'-UTR": (29674, 29903), "5'-UTR": (0, 265)}
 
@@ -109,12 +107,82 @@ def consume(iterator, n):
         # advance to the empty slice starting at position n
         next(islice(iterator, n, n), None)
 
-# -----------------------------------------------------------------------
+#-----------------------------------------------------------------------
+
+def adjust_positions(reference, orfs):
+    new_orfs = orfs
+    start_inserts = 0
+    total_inserts = 0
+    if "-" in reference[0:265]:
+        start_inserts = reference[0:265].count("-")
+
+    total_inserts+=start_inserts
+    # reference = reference[265:]
+    orf1ab_start_index = orfs["ORF1ab"][0] + total_inserts
+
+    orf1ab_join_index = reference.index("TAAACGG") + 4
+    
+    orf1ab_end_index = orf1ab_end_index = orfs["ORF1ab"][2] + total_inserts
+    
+    orf1ab = reference[orf1ab_start_index:orf1ab_end_index]
+    # if reference[orf1ab_join_index] != "C":
+    #     print("join:" + str(reference[orf1ab_join_index]) + "\n")
+    orf1ab_inserts = 0
+    if "-" in orf1ab:
+        orf1ab_inserts = orf1ab.count("-")
+    total_inserts+=orf1ab_inserts
+    orf1ab_end_index+=orf1ab_inserts
+    
+    new_orfs["ORF1ab"] = (orf1ab_start_index, orf1ab_join_index, orf1ab_end_index)
+
+    # "S": (21562, 25384), "ORF3a": (25392, 26220)
+    # s_start_index = orfs["S"][0] + total_inserts
+    # s_end_index = orfs["S"][1] + total_inserts
+    
+    # s = reference[s_start_index:s_end_index]
+    # s_inserts = 0
+    # if "-" in s:
+    #     s_inserts = s.count("-")
+    # s_end_index+=s_inserts
+    # total_inserts+=s_inserts
+
+    # orfs["S"] = (s_start_index, s_end_index)
+    
+    for orf in list(orfs.keys()):
+        if orf == "ORF1ab":
+            continue
+        orf_start_index = orfs[orf][0] + total_inserts
+        orf_end_index = orfs[orf][1] + total_inserts
+        
+        orf_sequence = reference[orf_start_index:orf_end_index]
+        orf_inserts = 0
+        if "-" in orf_sequence:
+            orf_inserts = orf_sequence.count("-")
+        orf_end_index+=orf_inserts
+        total_inserts+=orf_inserts
+        new_orfs[orf] = (orf_start_index, orf_end_index)
+    
+    return new_orfs
+
+    # orf1ab_start_index = reference.index("ATG")
+    # total_inserts = 0
+    # UTR_3_inserts = 0
+    # if orf1ab_start_index != 265:
+    #     UTR_3_inserts = orf1ab_start_index - 265
+    # orf1ab = reference[orf1ab_start_index:]
+    # orf1ab_join_index = orf1ab.index("TAAACGG") + 4 + UTR_3_inserts
+    # orf1ab_inserts = 0
+    # # if orf1ab_join_index != orf1ab_start_index + 13202:
+    # #     orf1ab_inserts = orf1ab_join_index - 13467
+    # orf1ab_end_index = orf1ab.index("TAA") + UTR_3_inserts
+    # orfs["ORF1AB"] = (orf1ab_start_index, orf1ab_end_index, orf1ab_join_index)
+#-----------------------------------------------------------------------
 
 
-def split_orf1ab(full_sequence):
-    orf1ab_sequence = full_sequence[265:13468] + \
-        full_sequence[13467:21555]
+def split_orf1ab(full_sequence, range):
+    orf1ab_sequence = full_sequence[range[0]:range[1] + 1] + \
+        full_sequence[range[1]:range[2]]
+    
     # orf1ab_sequence = orf1ab_sequence.replace("-", "N")
 
     # # print(orf1ab_sequence)
@@ -134,9 +202,9 @@ def split_orf1ab(full_sequence):
 
 def count_mutations():
     aligned_sequences_list = data_align.depickler("pickled_tuples")
-    insertion_count = 0
-    deletion_count = 0
-    notprinted = True
+    # insertion_count = 0
+    # deletion_count = 0
+    # notprinted = True
     # for rs, qs in aligned_sequences_list:
     #     if "-" in rs:
     #         if notprinted:
@@ -155,10 +223,22 @@ def count_mutations():
                               "E": {"mis": 0, "syn": 0, "in": 0, "del": 0}, "M": {"mis": 0, "syn": 0, "in": 0, "del": 0}, "ORF6": {"mis": 0, "syn": 0, "in": 0, "del": 0},
                               "ORF7a": {"mis": 0, "syn": 0, "in": 0, "del": 0}, "ORF7b": {"mis": 0, "syn": 0, "in": 0, "del": 0}, "ORF8": {"mis": 0, "syn": 0, "in": 0, "del": 0}, "ORF10": {"mis": 0, "syn": 0, "in": 0, "del": 0}, "N": {"mis": 0, "syn": 0, "in": 0, "del": 0}}
     for reference, query in aligned_sequences_list:
+        end_UTR_5 = 265
+        start_UTR_3 = 29674
+        orfs = {"ORF1ab": (265, 21555, 13467), "S": (21562, 25384), "ORF3a": (25392, 26220), "E": (26244, 26472),
+                   "M": (26522, 27191), "ORF6": (27201, 27387), "ORF7a": (27393, 27759), "ORF7b": (27755, 27887), "ORF8": (27893, 28259),
+                   "ORF10": (29557, 29674), "N": (28273, 29533)}
         if "-" in reference:
-            continue
-        else:
-            sequence_count += 1
+            orfs = adjust_positions(reference, orfs)
+            end_UTR_5 = orfs["ORF1ab"][0]
+            start_UTR_3 = orfs["ORF10"][1]
+            if reference[start_UTR_3 - 3:start_UTR_3+1] != "TAGC":
+                print(reference)
+                print(orfs)
+            # print(reference[start_UTR_3 - 3:start_UTR_3+1])
+            
+
+        sequence_count += 1
 
         # if "":
             # handle_deletions(reference, query)
@@ -167,17 +247,18 @@ def count_mutations():
         for index in indices:
             current_index = index
             current_segment = "Intergenic"
-            for segment, segment_range in GENOME_SEGMENTS.items():
+            for segment, segment_range in orfs.items():
                 segment_start = segment_range[0]
                 segment_end = segment_range[1]
 
                 if index == segment_start:
                     current_segment = segment
-                    current_ref_segment = reference[segment_start:segment_end]
-                    current_query_segment = query[segment_start:segment_end]
                     if segment == "ORF1ab":
-                        current_ref_segment = split_orf1ab(reference)
-                        current_query_segment = split_orf1ab(query)
+                        current_ref_segment = split_orf1ab(reference, segment_range)
+                        current_query_segment = split_orf1ab(query, segment_range)
+                    else:
+                        current_ref_segment = reference[segment_start:segment_end]
+                        current_query_segment = query[segment_start:segment_end]
 
                     ref_codons = [current_ref_segment[i:i + 3]
                                   for i in range(0, len(current_ref_segment), 3)]
@@ -186,7 +267,7 @@ def count_mutations():
 
                     for ref_codon, query_codon in zip(ref_codons, query_codons):
                         codon_indices = iter(range(len(ref_codon)))
-                        if "-" in query_codon:
+                        if "-" in query_codon or "-" in ref_codon:
                             break
                         for codon_index in codon_indices:
                             ref_base = ref_codon[codon_index]
@@ -248,9 +329,9 @@ def count_mutations():
             if current_index != index:
                 consume(indices, current_index - index)
 
-            if current_index < 265:
+            if current_index < end_UTR_5:
                 current_segment = "5'-UTR"
-            elif current_index >= 29674:
+            elif current_index >= start_UTR_3:
                 current_segment = "3'-UTR"
 
             ref_base = reference[current_index]
@@ -263,13 +344,37 @@ def count_mutations():
                     while current_char == "-" and end_index != len(query) - 1:
                         end_index += 1
                         current_char = query[end_index]
-                    base_change_position = f"{start_index+1}_{end_index}del"
+                    if start_index != end_index:
+                        base_change_position = f"{start_index+1}_{end_index}del"
+                    else:
+                        base_change_position = f"{start_index+1}del"
 
                     if base_pair_changes_position_dict.get(base_change_position):
                         base_pair_changes_position_dict[base_change_position] += 1
                     else:
                         base_pair_changes_position_dict[base_change_position] = 1
                         segment_mutations_dict[current_segment]["del"] += 1
+                    if start_index != end_index:
+                        consume(indices, end_index -
+                                start_index - 1)
+                elif ref_base == "-":
+                    start_index = current_index
+                    end_index = current_index
+                    current_char = "-"
+                    while current_char == "-" and end_index != len(reference) - 1:
+                        end_index += 1
+                        current_char = reference[end_index]
+                    if start_index != end_index:
+                        base_change_position = f"{start_index+1}_{end_index}in"
+                    else:
+                        base_change_position = f"{start_index+1}in"
+                        
+
+                    if base_pair_changes_position_dict.get(base_change_position):
+                        base_pair_changes_position_dict[base_change_position] += 1
+                    else:
+                        base_pair_changes_position_dict[base_change_position] = 1
+                        segment_mutations_dict[current_segment]["in"] += 1
                     if start_index != end_index:
                         consume(indices, end_index -
                                 start_index - 1)
@@ -289,14 +394,23 @@ def count_mutations():
                         base_pair_changes_position_dict[base_change_position] = 1
                         segment_mutations_dict[current_segment]["mut"] += 1
 
-    print(insertion_count, deletion_count, sequence_count)
+    print(sequence_count)
+    print()
+    
+    
+    sorted_base_pair_changes = sorted(base_pair_changes_dict.items(), key=lambda x:x[1], reverse=True)
+    base_pair_changes_dict = dict(sorted_base_pair_changes)
+
+    sorted_base_pair_changes_position = sorted(base_pair_changes_position_dict.items(), key=lambda x:x[1], reverse=True)
+    base_pair_changes_position_dict = dict(sorted_base_pair_changes_position)
+
 
     return base_pair_changes_dict, base_pair_changes_position_dict, segment_mutations_dict
 
 
 def main():
     changes_tuple = count_mutations()
-    # data_align.pickler(changes_tuple, "basepairchanges")
+    data_align.pickler(changes_tuple, "basepairchanges")
     print(changes_tuple[0])
     print()
     print(changes_tuple[1])
