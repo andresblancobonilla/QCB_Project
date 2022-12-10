@@ -115,16 +115,16 @@ def consume(iterator, n):
 
 def split_orf1ab(full_sequence):
     orf1ab_sequence = full_sequence[265:13468] + full_sequence[13467:21555]
-    orf1ab_sequence = orf1ab_sequence.replace("-", "N")
+    # orf1ab_sequence = orf1ab_sequence.replace("-", "N")
 
-    # print(orf1ab_sequence)
-    try:
-        translated = translate(orf1ab_sequence)
-    except Exception as ex:
-        print(ex)
-        # print(len(orf1ab_sequence))
-        # print(orf1ab_sequence)
-        sys.exit(1)
+    # # print(orf1ab_sequence)
+    # try:
+    #     translated = translate(orf1ab_sequence)
+    # except Exception as ex:
+    #     print(ex)
+    #     # print(len(orf1ab_sequence))
+    #     # print(orf1ab_sequence)
+    #     sys.exit(1)
         
     # print(translated)
     return orf1ab_sequence
@@ -149,9 +149,10 @@ def count_mutations():
     base_pair_changes_position_dict = {}
     # notprinted = True
     sequence_count = 0
-    segment_mutations_dict = {"3'-UTR": {"mut":0, "in":0, "del":0},"5'-UTR": {"mut":0,"in":0, "del":0},"Intergenic": {"mut":0,"in":0, "del":0},"ORF1ab": {"mis":0, "syn":0}, "S":{"mis":0, "syn":0}, "ORF3a":{"mis":0, "syn":0},\
-        "E":{"mis":0, "syn":0},"M":{"mis":0, "syn":0}, "ORF6":{"mis":0, "syn":0},\
-        "ORF7a":{"mis":0, "syn":0},"ORF7b":{"mis":0, "syn":0},"ORF8":{"mis":0, "syn":0}, "ORF10":{"mis":0, "syn":0}, "N":{"mis":0, "syn":0}}
+    segment_mutations_dict = {"3'-UTR": {"mut":0, "in":0, "del":0},"5'-UTR": {"mut":0,"in":0, "del":0},"Intergenic": {"mut":0,"in":0, "del":0},"ORF1ab": {"mis":0, "syn":0, "in":0, "del":0},\
+        "S":{"mis":0, "syn":0, "in":0, "del":0}, "ORF3a":{"mis":0, "syn":0, "in":0, "del":0},\
+        "E":{"mis":0, "syn":0, "in":0, "del":0},"M":{"mis":0, "syn":0, "in":0, "del":0}, "ORF6":{"mis":0, "syn":0, "in":0, "del":0},\
+        "ORF7a":{"mis":0, "syn":0, "in":0, "del":0},"ORF7b":{"mis":0, "syn":0, "in":0, "del":0},"ORF8":{"mis":0, "syn":0, "in":0, "del":0}, "ORF10":{"mis":0, "syn":0, "in":0, "del":0}, "N":{"mis":0, "syn":0, "in":0, "del":0}}
     for reference, query in aligned_sequences_list:
         if "-" in reference:
             continue
@@ -174,36 +175,64 @@ def count_mutations():
                     current_ref_segment = reference[segment_start:segment_end]
                     current_query_segment = query[segment_start:segment_end]
                     if segment == "ORF1ab":
-                        if "-" in current_query_segment or "_" in current_ref_segment:
-                            continue
-                        else:
-                            current_ref_segment = split_orf1ab(reference)
-                            current_query_segment = split_orf1ab(query)
+                        current_ref_segment = split_orf1ab(reference)
+                        current_query_segment = split_orf1ab(query)
                     
                     ref_codons = [current_ref_segment[i:i + 3] for i in range(0, len(current_ref_segment), 3)]
                     query_codons = [current_query_segment[i:i + 3] for i in range(0, len(current_query_segment), 3)]
 
                     current_index = index
                     for ref_codon, query_codon in zip(ref_codons, query_codons):
-                        for ref_base, query_base in zip(ref_codon, query_codon):
+                        codon_indices = iter(range(len(ref_codon)))
+                        for codon_index in codon_indices:
+                            ref_base = ref_codon[codon_index]
+                            query_base = query_codon[codon_index]
                             if ref_base != query_base:
-                                base_change = ref_base + ">" + query_base
-                                base_change_position = str(current_index + 1) + base_change
+                                if query_base == "-":
+                                    # if index == 1604:
+                                    #     print()
+                                    #     print("stop here!")
+                                    #     print()
+                                    start_index = codon_index
+                                    start_current_index = current_index
+                                    end_index = codon_index
+                                    current_char = "-"
+                                    while current_char == "-" and end_index != 2:
+                                        end_index+=1
+                                        current_index+=1
+                                        current_char = query_codon[end_index]
 
-                                if base_pair_changes_position_dict.get(base_change_position):
-                                    base_pair_changes_position_dict[base_change_position]+=1
-                                else:
-                                    base_pair_changes_position_dict[base_change_position] = 1
-                                    if base_pair_changes_dict.get(base_change):
-                                        base_pair_changes_dict[base_change]+=1
+                                    base_change_position = f"{start_current_index + 1}_{current_index + 1}del"
+                                    if current_index == 1605:
+                                        print()
+                                        print("here")
+                                        print()
+
+                                    if base_pair_changes_position_dict.get(base_change_position):
+                                        base_pair_changes_position_dict[base_change_position]+=1
                                     else:
-                                        base_pair_changes_dict[base_change] = 1
+                                        base_pair_changes_position_dict[base_change_position] = 1
+                                        segment_mutations_dict[current_segment]["del"]+=1
+                                    if start_index != end_index:
+                                        consume(codon_indices, end_index - start_index)
+                                else:
+                                    base_change = ref_base + ">" + query_base
+                                    base_change_position = str(current_index + 1) + base_change
 
-                                    if ref_codon != query_codon:
-                                        if  not CODON_TABLE.get(query_codon) or CODON_TABLE[ref_codon] != CODON_TABLE[query_codon]:
-                                            segment_mutations_dict[current_segment]["mis"]+=1
+                                    if base_pair_changes_position_dict.get(base_change_position):
+                                        base_pair_changes_position_dict[base_change_position]+=1
+                                    else:
+                                        base_pair_changes_position_dict[base_change_position] = 1
+                                        if base_pair_changes_dict.get(base_change):
+                                            base_pair_changes_dict[base_change]+=1
                                         else:
-                                            segment_mutations_dict[current_segment]["syn"]+=1
+                                            base_pair_changes_dict[base_change] = 1
+
+                                        if ref_codon != query_codon:
+                                            if  not CODON_TABLE.get(query_codon) or CODON_TABLE[ref_codon] != CODON_TABLE[query_codon]:
+                                                segment_mutations_dict[current_segment]["mis"]+=1
+                                            else:
+                                                segment_mutations_dict[current_segment]["syn"]+=1
                             current_index+=1
                     break
     
@@ -223,19 +252,36 @@ def count_mutations():
                 ref_base = reference[index]
                 query_base = query[index]
                 if ref_base != query_base:
-                    base_change = ref_base + ">" + query_base
-                    base_change_position = str(index + 1) + base_change
+                    if query_base == "-":
+                        start_index = index
+                        end_index = index
+                        current_char = "-"
+                        while current_char == "-" and end_index != len(query) - 1:
+                            end_index+=1
+                            current_char = query[end_index]
+                        base_change_position = f"{start_index+1}_{end_index}del"
 
-                    if base_pair_changes_dict.get(base_change):
-                        base_pair_changes_dict[base_change]+=1
+                        if base_pair_changes_position_dict.get(base_change_position):
+                            base_pair_changes_position_dict[base_change_position]+=1
+                        else:
+                            base_pair_changes_position_dict[base_change_position] = 1
+                            segment_mutations_dict[current_segment]["del"]+=1
+                        if start_index != end_index:
+                            consume(indices, end_index - start_index - 1)
                     else:
-                        base_pair_changes_dict[base_change] = 1
+                        base_change = ref_base + ">" + query_base
+                        base_change_position = str(index + 1) + base_change
 
-                    if base_pair_changes_position_dict.get(base_change_position):
-                        base_pair_changes_position_dict[base_change_position]+=1
-                    else:
-                        base_pair_changes_position_dict[base_change_position] = 1
-                        segment_mutations_dict[current_segment]["mut"]+=1
+                        if base_pair_changes_dict.get(base_change):
+                            base_pair_changes_dict[base_change]+=1
+                        else:
+                            base_pair_changes_dict[base_change] = 1
+
+                        if base_pair_changes_position_dict.get(base_change_position):
+                            base_pair_changes_position_dict[base_change_position]+=1
+                        else:
+                            base_pair_changes_position_dict[base_change_position] = 1
+                            segment_mutations_dict[current_segment]["mut"]+=1
 
     print(insertion_count, deletion_count, sequence_count)
 
