@@ -12,6 +12,7 @@ import pandas
 import Bio
 from Bio import SeqIO
 from Bio import Align
+from Bio.Seq import translate
 import data_processing
 import data_align
 import pickle
@@ -20,7 +21,7 @@ import collections
 
 #-----------------------------------------------------------------------
 
-GENOME_SEGMENTS = {"ORF1ab": (265,21554), "S":(21562,25383), "ORF3a":(25392,26219),"E":(26244,26471),\
+GENOME_SEGMENTS = {"ORF1ab": (265,21555), "S":(21562,25383), "ORF3a":(25392,26219),"E":(26244,26471),\
     "M":(26522,27190), "ORF6":(27201,27386), "ORF7a":(27393,27758), "ORF7b":(27755,27886), "ORF8":(27893,28258),\
         "ORF10":(29557,29673), "N":(28273,29532)}
 
@@ -96,6 +97,8 @@ CODON_TABLE = {
 
 #-----------------------------------------------------------------------
 
+
+
 def consume(iterator, n):
     "Advance the iterator n-steps ahead. If n is none, consume entirely."
     # Use functions that consume iterators at C speed.
@@ -108,19 +111,40 @@ def consume(iterator, n):
 
 #-----------------------------------------------------------------------
 
+def split_orf1ab(full_sequence):
+    orf1ab_sequence = full_sequence[265:13468] + full_sequence[13467:21555]
+    orf1ab_sequence = orf1ab_sequence.replace("-", "")
+
+    # print(orf1ab_sequence)
+    try:
+        translated = translate(orf1ab_sequence)
+    except Exception as ex:
+        print(ex)
+        print(len(orf1ab_sequence))
+        print(orf1ab_sequence)
+        sys.exit(1)
+        
+    # print(translated)
+    return orf1ab_sequence
+    
+#-----------------------------------------------------------------------
+
 def count_mutations():
     aligned_sequences_list = data_align.depickler("pickled_tuples")
     base_pair_changes_dict = {}
     base_pair_changes_position_dict = {}
+    notprinted = True
     segment_mutations_dict = {"ORF1ab": {"mis":0, "syn":0}, "S":{"mis":0, "syn":0}, "ORF3a":{"mis":0, "syn":0},\
         "E":{"mis":0, "syn":0},"M":{"mis":0, "syn":0}, "ORF6":{"mis":0, "syn":0},\
         "ORF7":{"mis":0, "syn":0}, "ORF8":{"mis":0, "syn":0}, "ORF10":{"mis":0, "syn":0}, "N":{"mis":0, "syn":0}}
-
     for reference, query in aligned_sequences_list:
-        print(len(reference))
-        print(reference[264:270])
-        print(reference[21551:21557])
-        notprinted = True
+        if len(reference) != len(query):
+            print("mismatch lengths")
+        if len(reference) != 29903:
+            continue
+        
+
+
         indices = iter(range(len(reference)))
         for index in indices:
             current_segment = "Intergenic"
@@ -128,20 +152,21 @@ def count_mutations():
                 segment_start = segment_range[0]
                 segment_end = segment_range[1]
 
-                if index == segment_range[0]:
+                if index == segment_start:
                     current_segment = segment
-                    current_ref_segment = reference[segment_range[0]:segment_range[1]]
-                    current_query_segment = query[segment_range[0]:segment_range[1]]
+                    current_ref_segment = reference[segment_start:segment_end]
+                    current_query_segment = query[segment_start:segment_end]
+                    if segment == "ORF1ab":
+                        if "-" in current_query_segment:
+                            continue
+                        else:
+                            current_ref_segment = split_orf1ab(reference)
+                            current_query_segment = split_orf1ab(query)
                     
                     ref_codons = [current_ref_segment[i:i + 3] for i in range(0, len(current_ref_segment), 3)]
                     query_codons = [current_query_segment[i:i + 3] for i in range(0, len(current_query_segment), 3)]
-                    if notprinted:
-                        print()
-                        print(ref_codons)
-                        print(len(ref_codons))
-                        print()
-                        notprinted = False
                     current_index = index
+
                     for ref_codon, query_codon in zip(ref_codons, query_codons):
                         for ref_base, query_base in zip(ref_codon, query_codon):
                             if ref_base != query_base:
@@ -151,25 +176,27 @@ def count_mutations():
                                     base_pair_changes_dict[base_change]+=1
                                 else:
                                     base_pair_changes_dict[base_change] = 1
-
                                 if base_pair_changes_position_dict.get(base_change_position):
                                     base_pair_changes_position_dict[base_change_position]+=1
                                 else:
                                     base_pair_changes_position_dict[base_change_position] = 1
-
                         if ref_codon != query_codon:
-                            if CODON_TABLE[ref_codon] != CODON_TABLE[query_codon]:
+                            if  not CODON_TABLE.get(query_codon) or CODON_TABLE[ref_codon] != CODON_TABLE[query_codon]:
                                 segment_mutations_dict[current_segment]["mis"]+=1
                             else:
                                 segment_mutations_dict[current_segment]["syn"]+=1
-                        break
+                        # except Exception:
+                        #     print(segment)
+                        #     print(ref_codon)
+                        #     print(query_codon)
+                        #     sys.exit(1)
     
                 else:
-                    break
+                    continue
                         
                         
             if current_segment != "Intergenic":
-                consume(indices, segment_end - segment_start)
+                consume(indices, segment_end - segment_start + 1)
 
             else:
                 ref_base = reference[index]
@@ -192,12 +219,13 @@ def count_mutations():
                 
 def main():
     changes_tuple = count_mutations()
-    data_align.pickler(changes_tuple, "basepairchanges")
+    # data_align.pickler(changes_tuple, "basepairchanges")
     print(changes_tuple[0])
     print()
     print(changes_tuple[1])
     print()
     print(changes_tuple[2])
+
 
 #-----------------------------------------------------------------------
 if __name__ == '__main__':
