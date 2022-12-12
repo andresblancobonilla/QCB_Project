@@ -222,7 +222,11 @@ def count_mutations():
                               "S": {"mis": 0, "syn": 0, "in": 0, "del": 0}, "ORF3a": {"mis": 0, "syn": 0, "in": 0, "del": 0},
                               "E": {"mis": 0, "syn": 0, "in": 0, "del": 0}, "M": {"mis": 0, "syn": 0, "in": 0, "del": 0}, "ORF6": {"mis": 0, "syn": 0, "in": 0, "del": 0},
                               "ORF7a": {"mis": 0, "syn": 0, "in": 0, "del": 0}, "ORF7b": {"mis": 0, "syn": 0, "in": 0, "del": 0}, "ORF8": {"mis": 0, "syn": 0, "in": 0, "del": 0}, "ORF10": {"mis": 0, "syn": 0, "in": 0, "del": 0}, "N": {"mis": 0, "syn": 0, "in": 0, "del": 0}}
+    sequence_index = 0
+    sequences_base_pair_changes_position_list = []
     for reference, query in aligned_sequences_list:
+        sequence_changes = {"sequence_index":sequence_index, "mutations":[]}
+        sequence_index+=1
         end_UTR_5 = 265
         start_UTR_3 = 29674
         orfs = {"ORF1ab": (265, 21555, 13467), "S": (21562, 25384), "ORF3a": (25392, 26220), "E": (26244, 26472),
@@ -305,6 +309,7 @@ def count_mutations():
                                 base_change = ref_base + ">" + query_base
                                 base_change_position = str(
                                     current_index + 1) + base_change
+                                sequence_changes["mutations"].append(base_change_position)
 
                                 if base_pair_changes_position_dict.get(base_change_position):
                                     base_pair_changes_position_dict[base_change_position] += 1
@@ -393,6 +398,8 @@ def count_mutations():
                     else:
                         base_pair_changes_position_dict[base_change_position] = 1
                         segment_mutations_dict[current_segment]["mut"] += 1
+                sequence_changes["mutations"].append(base_change_position)
+        sequences_base_pair_changes_position_list.append(sequence_changes)
 
     print(sequence_count)
     print()
@@ -405,7 +412,7 @@ def count_mutations():
     base_pair_changes_position_dict = dict(sorted_base_pair_changes_position)
 
 
-    return base_pair_changes_dict, base_pair_changes_position_dict, segment_mutations_dict
+    return base_pair_changes_dict, base_pair_changes_position_dict, segment_mutations_dict, sequences_base_pair_changes_position_list
 
 
 def main():
@@ -416,6 +423,8 @@ def main():
     print(changes_tuple[1])
     print()
     print(changes_tuple[2])
+    print()
+    print(changes_tuple[3])
 
 
 # -----------------------------------------------------------------------
