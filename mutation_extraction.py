@@ -388,9 +388,9 @@ def count_nucleotide_mutations():
                                                 else:
                                                     amino_acid_changes_position_dict[amino_acid_change_position] = 1
                                                     segment_mutations_dict[current_segment]["mis"] += 1
-                                                    if current_segment == "ORF1ab":
-                                                        print(amino_acid_change_position)
-                                                        print(base_change_position)
+                                                    # if current_segment == "ORF1ab":
+                                                    #     print(amino_acid_change_position)
+                                                    #     print(base_change_position)
                                         else:
                                             if base_pair_changes_position_dict.get(base_change_position) == 1:
                                                 segment_mutations_dict[current_segment]["syn"] += 1
