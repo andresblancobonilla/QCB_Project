@@ -457,16 +457,16 @@ def count_nucleotide_mutations():
                     base_change_position = str(
                         index + 1) + base_change
 
-                    if base_pair_changes_dict.get(base_change):
-                        base_pair_changes_dict[base_change] += 1
-                    else:
-                        base_pair_changes_dict[base_change] = 1
 
                     if base_pair_changes_position_dict.get(base_change_position):
                         base_pair_changes_position_dict[base_change_position] += 1
                     else:
                         base_pair_changes_position_dict[base_change_position] = 1
                         segment_mutations_dict[current_segment]["mut"] += 1
+                        if base_pair_changes_dict.get(base_change):
+                            base_pair_changes_dict[base_change] += 1
+                        else:
+                            base_pair_changes_dict[base_change] = 1
                         # else:
                         #     segment_mutations_dict[current_segment]["mis"] += 1
 
