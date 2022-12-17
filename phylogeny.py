@@ -12,7 +12,7 @@ import sys
 from contextlib import closing
 import pandas
 from Bio import SeqIO
-from numpy import random
+import random
 
 
 # Import individual fasta sequences into dataframe with two values: name of sequence (entire string), and the 
@@ -31,13 +31,14 @@ def read_sequences(fasta_file_list):
     return sequence_df
 
 def select_sequences(number,seqdf):
-    indices = random.randint(200, size=(number))
+    
+    indices = random.sample(range(seqdf.shape[0]), number)
     truncatedseqdf = seqdf.iloc[indices]
     return truncatedseqdf
 
 def return_fasta(sequencedf):
     output = ""
-    for i in range(1,2000):
+    for i in range(sequencedf.shape[0]):
         output=output +"\n>"+sequencedf.iloc[i,0]+"\n"+sequencedf.iloc[i,1]
     return output
 
@@ -51,6 +52,7 @@ def main():
     sequence_df = read_sequences(fasta_file_list)
     # print(sequence_df.iloc[0,:])
     # print(sequence_df)
+    print(sequence_df.shape[0])
     truncated_df = select_sequences(2000,sequence_df)
     output_fasta = return_fasta(truncated_df)
     print(output_fasta)
