@@ -1,14 +1,11 @@
 #!/usr/bin/env python
 
-# -----------------------------------------------------------------------
+#-----------------------------------------------------------------------
 # mutation_extraction.py
 # Author: Andres Blanco Bonilla, Fernando Del Castillo
 # Extracts mutations out of sequence by comparing it to reference
-# -----------------------------------------------------------------------
-import sys
-import sqlite3
-from contextlib import closing
-import pandas
+#-----------------------------------------------------------------------
+
 import Bio
 from Bio import SeqIO
 from Bio import Align
@@ -19,83 +16,9 @@ import pickle
 from itertools import islice
 import collections
 
-# -----------------------------------------------------------------------
-
-
-NON_CODING_SEGMENTS = {"3'-UTR": (29674, 29903), "5'-UTR": (0, 265)}
-
-CODON_TABLE = {
-    'TCA': 'S',    # Serina
-    'TCC': 'S',    # Serina
-    'TCG': 'S',    # Serina
-    'TCT': 'S',    # Serina
-    'TTC': 'F',    # Fenilalanina
-    'TTT': 'F',    # Fenilalanina
-    'TTA': 'L',    # Leucina
-    'TTG': 'L',    # Leucina
-    'TAC': 'Y',    # Tirosina
-    'TAT': 'Y',    # Tirosina
-    'TAA': '*',    # Stop
-    'TAG': '*',    # Stop
-    'TGC': 'C',    # Cisteina
-    'TGT': 'C',    # Cisteina
-    'TGA': '*',    # Stop
-    'TGG': 'W',    # Triptofano
-    'CTA': 'L',    # Leucina
-    'CTC': 'L',    # Leucina
-    'CTG': 'L',    # Leucina
-    'CTT': 'L',    # Leucina
-    'CCA': 'P',    # Prolina
-    'CCC': 'P',    # Prolina
-    'CCG': 'P',    # Prolina
-    'CCT': 'P',    # Prolina
-    'CAC': 'H',    # Histidina
-    'CAT': 'H',    # Histidina
-    'CAA': 'Q',    # Glutamina
-    'CAG': 'Q',    # Glutamina
-    'CGA': 'R',    # Arginina
-    'CGC': 'R',    # Arginina
-    'CGG': 'R',    # Arginina
-    'CGT': 'R',    # Arginina
-    'ATA': 'I',    # Isoleucina
-    'ATC': 'I',    # Isoleucina
-    'ATT': 'I',    # Isoleucina
-    'ATG': 'M',    # Methionina
-    'ACA': 'T',    # Treonina
-    'ACC': 'T',    # Treonina
-    'ACG': 'T',    # Treonina
-    'ACT': 'T',    # Treonina
-    'AAC': 'N',    # Asparagina
-    'AAT': 'N',    # Asparagina
-    'AAA': 'K',    # Lisina
-    'AAG': 'K',    # Lisina
-    'AGC': 'S',    # Serina
-    'AGT': 'S',    # Serina
-    'AGA': 'R',    # Arginina
-    'AGG': 'R',    # Arginina
-    'GTA': 'V',    # Valina
-    'GTC': 'V',    # Valina
-    'GTG': 'V',    # Valina
-    'GTT': 'V',    # Valina
-    'GCA': 'A',    # Alanina
-    'GCC': 'A',    # Alanina
-    'GCG': 'A',    # Alanina
-    'GCT': 'A',    # Alanina
-    'GAC': 'D',    # Acido Aspartico
-    'GAT': 'D',    # Acido Aspartico
-    'GAA': 'E',    # Acido Glutamico
-    'GAG': 'E',    # Acido Glutamico
-    'GGA': 'G',    # Glicina
-    'GGC': 'G',    # Glicina
-    'GGG': 'G',    # Glicina
-    'GGT': 'G',
-    '---': 'none'  # None
-}
-
-
-# -----------------------------------------------------------------------
-
-
+#-----------------------------------------------------------------------
+# This function is copied from the itertools Python documentation.
+# https://docs.python.org/3/library/itertools.html#recipes
 def consume(iterator, n):
     "Advance the iterator n-steps ahead. If n is none, consume entirely."
     # Use functions that consume iterators at C speed.
@@ -106,9 +29,10 @@ def consume(iterator, n):
         # advance to the empty slice starting at position n
         next(islice(iterator, n, n), None)
 
-# -----------------------------------------------------------------------
+#-----------------------------------------------------------------------
 
-
+# If an insertion is encountered sequence,
+# this function adjusts the windows of the ORFS as needed.
 def adjust_positions(reference, orfs):
     new_orfs = orfs
     start_inserts = 0
@@ -117,17 +41,17 @@ def adjust_positions(reference, orfs):
         start_inserts = reference[0:265].count("-")
 
     total_inserts += start_inserts
-    # reference = reference[265:]
     orf1ab_start_index = orfs["ORF1ab"][0] + total_inserts
-
+    
+    # This accounts for the -1 frameshift
+    # at sequence position 13468 (here index 13467).
+    # The "C" nucleotide is essentially read twice.
     orf1ab_join_index = reference.index("TAAACGG") + 4
 
     orf1ab_end_index = orf1ab_end_index = orfs["ORF1ab"][2] + \
         total_inserts
 
     orf1ab = reference[orf1ab_start_index:orf1ab_end_index]
-    # if reference[orf1ab_join_index] != "C":
-    #     print("join:" + str(reference[orf1ab_join_index]) + "\n")
     orf1ab_inserts = 0
     if "-" in orf1ab:
         orf1ab_inserts = orf1ab.count("-")
@@ -136,19 +60,6 @@ def adjust_positions(reference, orfs):
 
     new_orfs["ORF1ab"] = (orf1ab_start_index,
                           orf1ab_join_index, orf1ab_end_index)
-
-    # "S": (21562, 25384), "ORF3a": (25392, 26220)
-    # s_start_index = orfs["S"][0] + total_inserts
-    # s_end_index = orfs["S"][1] + total_inserts
-
-    # s = reference[s_start_index:s_end_index]
-    # s_inserts = 0
-    # if "-" in s:
-    #     s_inserts = s.count("-")
-    # s_end_index+=s_inserts
-    # total_inserts+=s_inserts
-
-    # orfs["S"] = (s_start_index, s_end_index)
 
     for orf in list(orfs.keys()):
         if orf == "ORF1ab":
@@ -166,61 +77,28 @@ def adjust_positions(reference, orfs):
 
     return new_orfs
 
-    # orf1ab_start_index = reference.index("ATG")
-    # total_inserts = 0
-    # UTR_3_inserts = 0
-    # if orf1ab_start_index != 265:
-    #     UTR_3_inserts = orf1ab_start_index - 265
-    # orf1ab = reference[orf1ab_start_index:]
-    # orf1ab_join_index = orf1ab.index("TAAACGG") + 4 + UTR_3_inserts
-    # orf1ab_inserts = 0
-    # # if orf1ab_join_index != orf1ab_start_index + 13202:
-    # #     orf1ab_inserts = orf1ab_join_index - 13467
-    # orf1ab_end_index = orf1ab.index("TAA") + UTR_3_inserts
-    # orfs["ORF1AB"] = (orf1ab_start_index, orf1ab_end_index, orf1ab_join_index)
-# -----------------------------------------------------------------------
-
-
+#-----------------------------------------------------------------------
+# This accounts for the -1 frameshift that occurs during the translation
+# of ORF1ab. ORF1ab's position is join(266..13468,13468..21555), as per
+# the NCBI page for the reference sequence.
 def split_orf1ab(full_sequence, range):
     orf1ab_sequence = full_sequence[range[0]:range[2] + 1] + \
         full_sequence[range[2]:range[1]]
-
-    # orf1ab_sequence = orf1ab_sequence.replace("-", "N")
-
-    # # print(orf1ab_sequence)
-    # try:
-    #     translated = translate(orf1ab_sequence)
-    # except Exception as ex:
-    #     print(ex)
-    #     # print(len(orf1ab_sequence))
-    #     # print(orf1ab_sequence)
-    #     sys.exit(1)
-
-    # print(translated)
     return orf1ab_sequence
 
-# -----------------------------------------------------------------------
+#-----------------------------------------------------------------------
+# Count both nucleotide and amino acid mutations in every query sequence
+# compared to the reference. Generally, check if a mutation, insertion,
+# or deletion has already been encountered in a previous sequence
+# before considering it as a new variant and incrementing counts.
 
-
-def count_nucleotide_mutations():
+def count_mutations():
+    # Read the pairs of aligned sequences in from our file
     aligned_sequences_list = data_align.depickler("all_pickled_tuples")
-    # insertion_count = 0
-    # deletion_count = 0
-    # notprinted = True
-    # for rs, qs in aligned_sequences_list:
-    #     if "-" in rs:
-    #         if notprinted:
-    #             print(rs[-60:])
-    #             print(qs[-60:])
-    #             print()
-    #         insertion_count+=1
-    #     if "-" in qs:
-    #         deletion_count+=1
+    
     base_pair_changes_dict = {}
     base_pair_changes_position_dict = {}
     amino_acid_changes_position_dict = {}
-    # notprinted = True
-    sequence_count = 0
     segment_mutations_dict = {"3'-UTR": {"mut": 0, "in": 0, "del": 0},
                               "5'-UTR": {"mut": 0, "in": 0, "del": 0},
                               "Intergenic": {"mut": 0, "in": 0, "del": 0},
@@ -231,59 +109,61 @@ def count_nucleotide_mutations():
                               "M": {"mis": 0, "syn": 0, "in": 0, "del": 0,  "ifi": 0, "ifd": 0, "fsd":0,  "sg": 0},
                               "ORF6": {"mis": 0, "syn": 0, "in": 0, "del": 0,  "ifi": 0, "ifd": 0, "fsd":0,  "sg": 0},
                               "ORF7a": {"mis": 0, "syn": 0, "in": 0, "del": 0,  "ifi": 0, "ifd": 0, "fsd":0,  "sg": 0},
-                              "ORF7b": {"mis": 0, "syn": 0, "in": 0, "del": 0,  "ifi": 0, "ifd": 0, "fsd":0,  "sg": 0},
                               "ORF8": {"mis": 0, "syn": 0, "in": 0, "del": 0,  "ifi": 0, "ifd": 0, "fsd":0,  "sg": 0},
                               "ORF10": {"mis": 0, "syn": 0, "in": 0, "del": 0,  "ifi": 0, "ifd": 0, "fsd":0,  "sg": 0},
                               "N": {"mis": 0, "syn": 0, "in": 0, "del": 0,  "ifi": 0, "ifd": 0, "fsd":0,  "sg": 0}}
-    sequence_index = 0
     sequences_base_pair_changes_position_list = []
     sequences_amino_acid_changes_position_list = []
-    for reference, query in aligned_sequences_list:
 
-        # if sequence_index % 50 == 0:
-        #     print(f"counted mutations in {sequence_index} sequences")
+    sequence_index = 0
+    sequence_count = 0
+    
+    for reference, query in aligned_sequences_list:
         sequence_changes = {
             "sequence_index": sequence_index, "mutations": []}
         sequence_amino_acid_changes = {
             "sequence_index": sequence_index, "mutations": []}
         sequence_index += 1
-        current_amino_acid_index = 0
+
         end_UTR_5 = 265
         start_UTR_3 = 29674
         orfs = {"ORF1ab": (265, 21555, 13467), "S": (21562, 25384), "ORF3a": (25392, 26220),
                 "E": (26244, 26472), "M": (26522, 27191), "ORF6": (27201, 27387),
-                "ORF7a": (27393, 27759), "ORF7b": (27755, 27887), "ORF8": (27893, 28259),
+                "ORF7a": (27393, 27759), "ORF8": (27893, 28259),
                 "N": (28273, 29533), "ORF10": (29557, 29674)}
+        
+        # Adjust these ORF ranges if there is an insertion
         if "-" in reference:
             orfs = adjust_positions(reference, orfs)
             end_UTR_5 = orfs["ORF1ab"][0]
             start_UTR_3 = orfs["ORF10"][1]
-            # if reference[start_UTR_3 - 3:start_UTR_3+1] != "TAGC":
-            #     print(reference)
-            #     print(orfs)
-            # # print(reference[start_UTR_3 - 3:start_UTR_3+1])
 
         sequence_count += 1
 
-        # if "":
-        # handle_deletions(reference, query)
 
         indices = iter(range(len(reference)))
         for index in indices:
             current_index = index
             current_segment = "Intergenic"
+
             for segment, segment_range in orfs.items():
                 segment_start = segment_range[0]
                 segment_end = segment_range[1]
 
                 if index >= segment_start and index < segment_end:
                     current_segment = segment
+                    
+                    # if at the start of an ORF, loop through the codons
+                    # in the ORF
                     if index == segment_start:
-                        if segment == "ORF1ab":
+                        if current_segment == "ORF1ab":
                             current_ref_segment = split_orf1ab(
                                 reference, segment_range)
                             current_query_segment = split_orf1ab(
                                 query, segment_range)
+                            # index must be corrected later
+                            # to account for the -1 frameshift
+                            corrected_index = False
                         else:
                             current_ref_segment = reference[segment_start:segment_end]
                             current_query_segment = query[segment_start:segment_end]
@@ -293,29 +173,29 @@ def count_nucleotide_mutations():
                         query_codons = [current_query_segment[i:i + 3]
                                         for i in range(0, len(current_query_segment), 3)]
 
+                        # BioPython translate will fail if gaps ("-")
+                        # are in the sequence
+
                         ref_amino_acids = translate(
                             current_ref_segment.replace("-", ""))
                         query_amino_acids = translate(
                             current_query_segment.replace("-", ""))
-                        # print()
-                        # print(segment)
-                        # print(ref_amino_acids[:3])
-                        # print(ref_amino_acids[-3:])
-                        # print()
-                        # print(query_amino_acids[:3])
-                        # print(query_amino_acids[-3:])
                         segment_amino_acid_index = 0
 
-                        for ref_codon, query_codon, ref_amino_acid, query_amino_acid\
-                                in zip(ref_codons, query_codons, ref_amino_acids, query_amino_acids):
+                        for ref_codon, query_codon, ref_amino_acid,\
+                        query_amino_acid in zip(ref_codons,\
+                        query_codons, ref_amino_acids,\
+                        query_amino_acids):
+
                             segment_amino_acid_index += 1
-                            current_amino_acid_index += 1
                             
+                            # hanle deletions
                             if "-" in query_codon:
+
                                 if ref_amino_acid != query_amino_acid:   
-                                    amino_acid_change_position = f"{ref_amino_acid}{current_amino_acid_index}del"
+                                    amino_acid_change_position = f"{ref_amino_acid}{segment_amino_acid_index}del"
                                 else:
-                                    amino_acid_change_position = f"{ref_amino_acids[segment_amino_acid_index]}{current_amino_acid_index + 1}del"
+                                    amino_acid_change_position = f"{ref_amino_acids[segment_amino_acid_index]}{segment_amino_acid_index + 1}del"
                                     
                                 sequence_amino_acid_changes["mutations"].append(amino_acid_change_position)
                                     
@@ -327,13 +207,16 @@ def count_nucleotide_mutations():
                                         segment_mutations_dict[current_segment]["fsd"] += 1
                                     else:
                                         segment_mutations_dict[current_segment]["ifd"] += 1
+                
+                                # quit codon loop if insertion is encountered
                                 break
-                            
+                                        
+                            # handle insertions
                             if "-" in ref_codon:
                                 if ref_amino_acid != query_amino_acid:   
-                                    amino_acid_change_position = f"{query_amino_acid}{current_amino_acid_index}in"
+                                    amino_acid_change_position = f"{query_amino_acid}{segment_amino_acid_index}in"
                                 else:
-                                    amino_acid_change_position = f"{query_amino_acids[segment_amino_acid_index]}{current_amino_acid_index + 1}in"
+                                    amino_acid_change_position = f"{query_amino_acids[segment_amino_acid_index]}{segment_amino_acid_index + 1}in"
                                     
                                 sequence_amino_acid_changes["mutations"].append(amino_acid_change_position)
                                                             
@@ -346,10 +229,12 @@ def count_nucleotide_mutations():
                                         segment_mutations_dict[current_segment]["fsd"] += 1
                                     else:
                                         segment_mutations_dict[current_segment]["ifi"] += 1
+                                # quit codon loop if insertion is encountered
                                 break
-
+                            
+                            # handle stop-gained mutations
                             if ref_amino_acid != query_amino_acid and query_amino_acid == "*":
-                                amino_acid_change_position = f"{ref_amino_acid}{current_amino_acid_index}{query_amino_acid}"
+                                amino_acid_change_position = f"{ref_amino_acid}{segment_amino_acid_index}{query_amino_acid}"
                                     
                                 sequence_amino_acid_changes["mutations"].append(amino_acid_change_position)
                                 
@@ -361,14 +246,25 @@ def count_nucleotide_mutations():
                                     segment_mutations_dict[current_segment]["sg"] += 1
                                 break
                             
+                            # iterate through bases in codons
                             for ref_base, query_base in zip(ref_codon, query_codon):
-                                if ref_base != query_base:
+                                current_index += 1
+                                # ignore ambigious reads
+                                if ref_base != query_base and query_base in ["A", "C", "T", "G"]:
+                                    # correct index to account for ORF1ab frameshit
+                                    if current_segment == "ORF1ab"\
+                                    and current_index > orfs["ORF1ab"][2]\
+                                    and not corrected_index:
+                                        current_index-=1
+                                        corrected_index = True
+
                                     base_change = ref_base + ">" + query_base
+
                                     base_change_position = str(
-                                        current_index + 1) + base_change
+                                        current_index) + base_change
                                     sequence_changes["mutations"].append(
                                         base_change_position)
-
+                                    
                                     if base_pair_changes_position_dict.get(base_change_position):
                                         base_pair_changes_position_dict[base_change_position] += 1
                                     else:
@@ -378,9 +274,10 @@ def count_nucleotide_mutations():
                                         else:
                                             base_pair_changes_dict[base_change] = 1
 
+                                    # ignore ambiguous reads
                                     if query_amino_acid != 'X':
                                         if ref_amino_acid != query_amino_acid:
-                                                amino_acid_change_position = f"{ref_amino_acid}{current_amino_acid_index}{query_amino_acid}"
+                                                amino_acid_change_position = f"{ref_amino_acid}{segment_amino_acid_index}{query_amino_acid}"
                                                 sequence_amino_acid_changes["mutations"].append(
                                                 amino_acid_change_position)
                                                 if amino_acid_changes_position_dict.get(amino_acid_change_position):
@@ -388,57 +285,75 @@ def count_nucleotide_mutations():
                                                 else:
                                                     amino_acid_changes_position_dict[amino_acid_change_position] = 1
                                                     segment_mutations_dict[current_segment]["mis"] += 1
-                                                    # if current_segment == "ORF1ab":
-                                                    #     print(amino_acid_change_position)
-                                                    #     print(base_change_position)
+                        
                                         else:
                                             if base_pair_changes_position_dict.get(base_change_position) == 1:
                                                 segment_mutations_dict[current_segment]["syn"] += 1
-    
-                                current_index += 1
+
+                    # exit the segment loop if inside a segment
                     break
 
                 else:
                     continue
 
-            # if current_index != index:
-            #     consume(indices, current_index - index)
-
             if current_index < end_UTR_5:
                 current_segment = "5'-UTR"
             elif current_index >= start_UTR_3:
                 current_segment = "3'-UTR"
+            
+            end_of_sequence_index = len(reference) - 1
 
             ref_base = reference[current_index]
             query_base = query[current_index]
-            if ref_base != query_base:
+
+            # count mutations/variations in non-coding regions
+            if ref_base != query_base and query_base in ["A", "C", "T", "G", "-"]:
+                
+                # handle deletions by iterating through all the deletions
+                # that are in a row and then skipping forward in the
+                # outer index loop
                 if query_base == "-":
                     start_index = current_index
                     end_index = current_index
-                    current_char = "-"
-                    while current_char == "-" and end_index != len(query) - 1:
-                        end_index += 1
-                        current_char = query[end_index]
+                    next_char = ""
+                    if end_index < end_of_sequence_index:
+                        next_char = query[end_index + 1]
+                    
+                    while next_char == "-" and end_index < end_of_sequence_index:
+                        end_index +=1
+                        next_char = query[end_index]
+
                     if start_index != end_index:
                         base_change_position = f"{start_index+1}_{end_index}del"
                     else:
                         base_change_position = f"{start_index+1}del"
-
-                    if base_pair_changes_position_dict.get(base_change_position):
-                        base_pair_changes_position_dict[base_change_position] += 1
-                    else:
-                        base_pair_changes_position_dict[base_change_position] = 1
-                        segment_mutations_dict[current_segment]["del"] += 1
+                        
+                    
+                    # ignore deletions if they start at the start of the
+                    # sequence or end at the end of the sequence
+                    if end_index != end_of_sequence_index and start_index != 0:
+                        if base_pair_changes_position_dict.get(base_change_position):
+                            base_pair_changes_position_dict[base_change_position] += 1
+                        else:
+                            base_pair_changes_position_dict[base_change_position] = 1
+                            segment_mutations_dict[current_segment]["del"] += 1
                     if start_index != end_index:
-                        consume(indices, end_index -
-                                start_index - 1)
+                        consume(indices, end_index - start_index - 1)
+
+                # handle insertions by iterating through all the insertions
+                # that are in a row and then skipping forward in the
+                # outer index loop
                 elif ref_base == "-":
                     start_index = current_index
                     end_index = current_index
-                    current_char = "-"
-                    while current_char == "-" and end_index != len(reference) - 1:
-                        end_index += 1
-                        current_char = reference[end_index]
+                    next_char = ""
+                    if end_index < end_of_sequence_index:
+                        next_char = reference[end_index + 1]
+                    
+                    while next_char == "-" and end_index < end_of_sequence_index:
+                        end_index +=1
+                        next_char = reference[end_index]
+
                     if start_index != end_index:
                         base_change_position = f"{start_index+1}_{end_index}in"
                     else:
@@ -450,8 +365,9 @@ def count_nucleotide_mutations():
                         base_pair_changes_position_dict[base_change_position] = 1
                         segment_mutations_dict[current_segment]["in"] += 1
                     if start_index != end_index:
-                        consume(indices, end_index -
-                                start_index - 1)
+                        consume(indices, end_index - start_index - 1)
+                
+                # count mutations in non-coding regions only 
                 elif current_segment in ["5'-UTR", "3'-UTR", "Intergenic"]:
                     base_change = ref_base + ">" + query_base
                     base_change_position = str(
@@ -467,8 +383,6 @@ def count_nucleotide_mutations():
                             base_pair_changes_dict[base_change] += 1
                         else:
                             base_pair_changes_dict[base_change] = 1
-                        # else:
-                        #     segment_mutations_dict[current_segment]["mis"] += 1
 
                 sequence_changes["mutations"].append(
                     base_change_position)
@@ -480,9 +394,6 @@ def count_nucleotide_mutations():
 
         sequences_amino_acid_changes_position_list.append(
             sequence_amino_acid_changes)
-        # if current_amino_acid_index != 9755:
-        #     print(f"number of amino acids: {current_amino_acid_index}\n sequence length: {len(reference)}")
-        #     print()
 
     sorted_base_pair_changes = sorted(
         base_pair_changes_dict.items(), key=lambda x: x[1], reverse=True)
@@ -505,8 +416,8 @@ def count_nucleotide_mutations():
 
 
 def main():
-    changes_tuple = count_nucleotide_mutations()
-    data_align.pickler(changes_tuple, "all_base_pair_changes_updated")
+    changes_tuple = count_mutations()
+    data_align.pickler(changes_tuple, "all_base_pair_changes_updated_again")
     print(changes_tuple[0])
     print()
     print(changes_tuple[1])
@@ -517,8 +428,8 @@ def main():
     print()
     # print(changes_tuple[4])
     # print()
-    print(changes_tuple[5])
-    print()
+    # print(changes_tuple[5])
+    # print()
 
 # -----------------------------------------------------------------------
 if __name__ == '__main__':
